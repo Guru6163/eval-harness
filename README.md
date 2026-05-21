@@ -15,7 +15,8 @@ Runs the Next.js frontend at [http://localhost:3000](http://localhost:3000).
 ### API (`apps/api`)
 
 ```bash
+cd apps/api && python scripts/seed.py
 cd apps/api && uvicorn main:app --reload
 ```
 
-Runs the FastAPI backend at [http://localhost:8000](http://localhost:8000).
+Seeds the SQLite database (`extractbench.db`), then runs the FastAPI backend at [http://localhost:8000](http://localhost:8000).
