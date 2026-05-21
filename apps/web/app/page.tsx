@@ -1,6 +1,7 @@
 import { AboutDemoPanel } from "@/components/dashboard/about-demo";
+import { AnimatedHero } from "@/components/dashboard/animated-hero";
 import { DocumentsTable } from "@/components/dashboard/documents-table";
-import { StatsRow } from "@/components/dashboard/stats-row";
+import { GridBackground } from "@/components/dashboard/grid-background";
 import { TypeAccuracySection } from "@/components/dashboard/type-accuracy";
 import { SiteNav } from "@/components/site-nav";
 import { getDashboardData } from "@/lib/api";
@@ -47,38 +48,22 @@ export default async function Home() {
   return (
     <>
       <SiteNav />
-      <main className="mx-auto max-w-5xl px-8 pb-32">
-        <header className="py-24">
-          <p className="text-xs font-medium tracking-widest text-muted uppercase">
-            Evaluation harness
-          </p>
-          <h1 className="mt-6 max-w-3xl text-5xl font-medium tracking-tight text-ink">
-            Extraction accuracy across 18 documents
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg text-muted">
-            Measures how reliably GPT-4o extracts structured procurement fields
-            from messy supplier quotes, customer requests, and purchase orders.
-          </p>
-          {error ? (
-            <p className="mt-6 text-sm text-fail">
-              API unavailable — start the backend at localhost:8000. ({error})
-            </p>
-          ) : null}
-          <StatsRow
+      <div className="relative">
+        <GridBackground />
+        <main className="mx-auto max-w-6xl px-6 pb-40 md:px-8">
+          <AnimatedHero
             overallAccuracy={data.overallAccuracy}
             documentsEvaluated={data.documentsEvaluated}
             totalDocuments={totalDocuments}
-            fieldsScored={
-              data.fieldsScored || totalDocuments * 7
-            }
+            fieldsScored={data.fieldsScored || totalDocuments * 7}
             avgLatencySec={data.avgLatencySec}
+            error={error}
           />
-        </header>
-
-        <TypeAccuracySection items={data.byDocType} />
-        <DocumentsTable documents={data.documents} />
-        <AboutDemoPanel />
-      </main>
+          <TypeAccuracySection items={data.byDocType} />
+          <DocumentsTable documents={data.documents} />
+          <AboutDemoPanel />
+        </main>
+      </div>
     </>
   );
 }

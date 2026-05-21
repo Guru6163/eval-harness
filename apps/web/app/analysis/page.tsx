@@ -1,13 +1,12 @@
+import { AlertCircle, Layers, Lightbulb } from "lucide-react";
+
 import { FieldBars } from "@/components/analysis/field-bars";
+import { GridBackground } from "@/components/dashboard/grid-background";
 import { SiteNav } from "@/components/site-nav";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { AnalysisHero } from "@/components/analysis/analysis-hero";
+import { FailureModesTable } from "@/components/analysis/failure-modes-table";
+import { NextSection } from "@/components/analysis/next-section";
+import { Reveal } from "@/lib/motion";
 import { type FieldAccuracy, getFieldAccuracy } from "@/lib/api";
 
 const FAILURE_MODES = [
@@ -32,7 +31,7 @@ const FAILURE_MODES = [
     example: "Scanned valve quote with illegible lead time filled as 14d",
   },
   {
-    mode: "Ambiguous SKU references (“the usual”)",
+    mode: "Ambiguous SKU references (\u201Cthe usual\u201D)",
     count: 5,
     example: "Forwarded email RFQ — line_items missing HF-CB-38",
   },
@@ -56,83 +55,42 @@ export default async function AnalysisPage() {
   return (
     <>
       <SiteNav />
-      <main className="mx-auto max-w-5xl px-8 py-24 pb-32">
-        <p className="text-xs font-medium tracking-widest text-muted uppercase">
-          Analysis
-        </p>
-        <h1 className="mt-6 text-5xl font-medium tracking-tight text-ink">
-          Where extraction breaks down
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg text-muted">
-          Field-level accuracy and recurring failure patterns across the
-          evaluation corpus.
-        </p>
+      <div className="relative">
+        <GridBackground />
+        <main className="mx-auto max-w-6xl px-6 pb-40 md:px-8">
+          <AnalysisHero />
 
-        <section className="mt-20 border-t border-border pt-20">
-          <h2 className="text-sm font-medium tracking-wide text-ink">
-            Accuracy by field
-          </h2>
-          <FieldBars items={fieldAccuracy} />
-        </section>
+          <Reveal as="section" className="border-t border-border py-24">
+            <div className="flex items-center gap-3">
+              <Layers className="h-4 w-4 text-accent" strokeWidth={1.5} />
+              <h2 className="text-xs font-medium tracking-widest text-muted uppercase">
+                Section · 01 — Accuracy by field
+              </h2>
+            </div>
+            <FieldBars items={fieldAccuracy} />
+          </Reveal>
 
-        <section className="mt-20 border-t border-border pt-20">
-          <h2 className="text-sm font-medium tracking-wide text-ink">
-            Failure modes
-          </h2>
-          <Table className="mt-10">
-            <TableHeader>
-              <TableRow className="border-b border-border hover:bg-transparent">
-                <TableHead>Failure mode</TableHead>
-                <TableHead className="text-right">Count</TableHead>
-                <TableHead>Example</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {FAILURE_MODES.map((row) => (
-                <TableRow
-                  key={row.mode}
-                  className="border-b border-border hover:bg-transparent"
-                >
-                  <TableCell className="text-ink">{row.mode}</TableCell>
-                  <TableCell className="text-right text-muted">
-                    <span className="tabular-nums">{row.count}</span>
-                  </TableCell>
-                  <TableCell className="text-muted">{row.example}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
+          <Reveal as="section" className="border-t border-border py-24">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-4 w-4 text-fail" strokeWidth={1.5} />
+              <h2 className="text-xs font-medium tracking-widest text-muted uppercase">
+                Section · 02 — Failure modes
+              </h2>
+            </div>
+            <FailureModesTable rows={FAILURE_MODES} />
+          </Reveal>
 
-        <section className="mt-20 border-t border-border pt-20">
-          <h2 className="text-2xl font-medium tracking-tight text-ink">
-            What I would build next
-          </h2>
-          {/* EDIT BEFORE SENDING */}
-          <div className="mt-6 max-w-3xl space-y-4 text-base leading-relaxed text-ink/90">
-            <p>
-              [Placeholder — describe the highest-leverage product follow-up.
-              Example: a human-in-the-loop review queue for partial extractions,
-              with one-click accept/reject per field and automatic re-prompting
-              on failure clusters.]
-            </p>
-            <p>
-              [Placeholder — technical direction. Example: fine-tuned smaller
-              models per document type, with Sonnet reserved for low-confidence
-              fields only; cache OCR layers for scanned PDFs.]
-            </p>
-            <p>
-              [Placeholder — evaluation expansion. Example: add layout-aware
-              PDF parsing, multilingual quotes, and attachment-heavy email
-              threads; score calibration curves by format not just aggregate %.]
-            </p>
-            <p>
-              [Placeholder — closing note on why this harness matters for your
-              roadmap and what metric would gate a production rollout.]
-            </p>
-          </div>
-        </section>
-      </main>
+          <Reveal as="section" className="border-t border-border py-24">
+            <div className="flex items-center gap-3">
+              <Lightbulb className="h-4 w-4 text-partial" strokeWidth={1.5} />
+              <h2 className="text-xs font-medium tracking-widest text-muted uppercase">
+                Section · 03 — What I would build next
+              </h2>
+            </div>
+            <NextSection />
+          </Reveal>
+        </main>
+      </div>
     </>
   );
 }

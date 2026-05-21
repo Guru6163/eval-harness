@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload
 
 from app.extraction import extract_document
 from app.models import Document, ExtractionRun, FieldScore, GroundTruth
@@ -19,7 +19,7 @@ def load_run(db: Session, run_id: str) -> ExtractionRun | None:
     return db.scalar(
         select(ExtractionRun)
         .where(ExtractionRun.id == run_id)
-        .options(joinedload(ExtractionRun.field_scores))
+        .options(selectinload(ExtractionRun.field_scores))
     )
 
 

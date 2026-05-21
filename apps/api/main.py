@@ -7,7 +7,7 @@ load_dotenv()
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.models import Document, ExtractionRun, GroundTruth
@@ -47,7 +47,7 @@ def list_documents(db: Session = Depends(get_db)) -> list[DocumentOut]:
         latest_run = db.scalar(
             select(ExtractionRun)
             .where(ExtractionRun.document_id == doc.id)
-            .options(joinedload(ExtractionRun.field_scores))
+            .options(selectinload(ExtractionRun.field_scores))
             .order_by(ExtractionRun.created_at.desc())
             .limit(1)
         )
@@ -71,8 +71,10 @@ def get_document(document_id: str, db: Session = Depends(get_db)) -> DocumentDet
         select(Document)
         .where(Document.id == document_id)
         .options(
-            joinedload(Document.ground_truths),
-            joinedload(Document.extraction_runs).joinedload(ExtractionRun.field_scores),
+            selectinload(Document.ground_truths),
+            selectinload(Document.extraction_runs).selectinload(
+                ExtractionRun.field_scores
+            ),
         )
     )
     if doc is None:
@@ -105,7 +107,7 @@ def list_runs(db: Session = Depends(get_db)) -> list[RunsByDocumentOut]:
             db.scalars(
                 select(ExtractionRun)
                 .where(ExtractionRun.document_id == doc.id)
-                .options(joinedload(ExtractionRun.field_scores))
+                .options(selectinload(ExtractionRun.field_scores))
                 .order_by(ExtractionRun.created_at.desc())
             ).all()
         )
