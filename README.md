@@ -56,7 +56,7 @@ curl -X POST http://localhost:8000/api/runs/{document_id}
 | **GPT-4o** | Strong structured-output quality and native JSON mode; widely available and predictable for document extraction evals. |
 | **SQLite** | Zero-ops persistence; recipients can clone, run, and inspect `extractbench.db` without Docker or Postgres. |
 | **FastAPI** | Thin API layer with automatic OpenAPI docs and straightforward SQLAlchemy integration. |
-| **Next.js 15 (App Router)** | Server components fetch eval results without exposing API keys to the browser. |
+| **Next.js 15 (App Router)** | Client pages fetch eval results from the public API URL in the browser (`NEXT_PUBLIC_API_URL`). |
 | **Deterministic scoring** | Rules-based comparison keeps evals reproducible and explainable; no second LLM judge required. |
 | **Plain-text fixtures** | Skips PDF generation while still modeling OCR scans, emails, and spreadsheets as extracted text. |
 
