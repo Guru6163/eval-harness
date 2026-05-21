@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pydantic
+openai
+sqlalchemy
+python-multipart
+pdfplumber
+pypdf
+python-dotenv
+python-dateutil

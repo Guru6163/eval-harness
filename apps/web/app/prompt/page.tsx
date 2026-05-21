@@ -189,7 +189,7 @@ export default function PromptPage() {
 
   const handleRun = async (promptId: string) => {
     setRunningId(promptId);
-    setRunProgress({ completed: 0, total: 18 });
+    setRunProgress({ completed: 0, total: 12 });
     try {
       await triggerRunAll(promptId);
       await pollUntilDone(promptId);

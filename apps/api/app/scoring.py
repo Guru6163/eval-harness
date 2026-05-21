@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from difflib import SequenceMatcher
 from datetime import date, datetime
 from typing import Any, TYPE_CHECKING
 
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 FUZZY_THRESHOLD = 0.85
 FUZZY_PARTIAL_THRESHOLD = 0.70
 VENDOR_FUZZY_THRESHOLD = 0.80
+VENDOR_CORE_PREFIX_MIN_RATIO = 0.55
 
 _CURRENCY_SYMBOLS = re.compile(r"[$€£¥]")
 _VENDOR_SUFFIXES = re.compile(
@@ -92,6 +94,10 @@ def _match_type(score: float, expected: Any, actual: Any) -> MatchType:
     return MatchType.wrong
 
 
+_EURO_AMOUNT_RE = re.compile(r"^\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?$")
+_TRAILING_CURRENCY_RE = re.compile(r"\s*(?:EUR|USD|GBP|CHF)\s*$", re.IGNORECASE)
+
+
 def _parse_amount(value: Any) -> float | None:
     if value is None:
         return None
@@ -102,12 +108,21 @@ def _parse_amount(value: Any) -> float | None:
     text = str(value).strip()
     if not text:
         return None
-    text = _CURRENCY_SYMBOLS.sub("", text)
-    text = text.replace(",", "").strip()
+    text = _CURRENCY_SYMBOLS.sub("", text).strip()
+    text = _TRAILING_CURRENCY_RE.sub("", text).strip()
     if not text:
         return None
+
+    compact = text.replace(" ", "")
+    if _EURO_AMOUNT_RE.fullmatch(compact):
+        try:
+            return float(compact.replace(".", "").replace(",", "."))
+        except ValueError:
+            return None
+
+    cleaned = compact.replace(",", "")
     try:
-        return float(text)
+        return float(cleaned)
     except ValueError:
         return None
 
@@ -128,6 +143,9 @@ def _normalize_currency(value: Any) -> str:
     return raw.upper()
 
 
+_WEEKS_RE = re.compile(r"(\d+)\s*weeks?", re.IGNORECASE)
+
+
 def _parse_int_value(value: Any) -> int | None:
     if value is None:
         return None
@@ -144,6 +162,29 @@ def _parse_int_value(value: Any) -> int | None:
         return int(float(text.replace(",", "")))
     except ValueError:
         return None
+
+
+def _parse_lead_time_days(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if "same week" in text or "within the week" in text:
+        return 7
+
+    weeks_match = _WEEKS_RE.search(text)
+    if weeks_match:
+        return int(weeks_match.group(1)) * 7
+
+    return _parse_int_value(value)
 
 
 def _parse_calendar_date(value: Any) -> date | None:
@@ -172,13 +213,22 @@ def _score_vendor(expected: Any, actual: Any) -> tuple[float, str]:
     act = _normalize_vendor(str(actual))
     if exp == act:
         return 1.0, "Exact match"
+
     ratio = _levenshtein_ratio(exp, act)
-    if ratio > VENDOR_FUZZY_THRESHOLD:
+    shorter, longer = (exp, act) if len(exp) <= len(act) else (act, exp)
+    if longer.startswith(shorter) and ratio >= VENDOR_CORE_PREFIX_MIN_RATIO:
+        return 0.7, f"Core name match ({ratio:.2f})"
+    if ratio >= VENDOR_FUZZY_THRESHOLD:
         return 0.7, f"Fuzzy match ({ratio:.2f})"
     return 0.0, f"No match ({ratio:.2f})"
 
 
 def _score_total_amount(expected: Any, actual: Any) -> tuple[float, str]:
+    if _is_empty(expected):
+        if _is_empty(actual):
+            return 1.0, "No total expected"
+        return 0.0, "Unexpected total"
+
     exp_val = _parse_amount(expected)
     act_val = _parse_amount(actual)
     if exp_val is None or act_val is None:
@@ -211,8 +261,8 @@ def _score_lead_time(expected: Any, actual: Any) -> tuple[float, str]:
             return 1.0, "Not required"
         return 0.0, "Hallucinated lead time"
 
-    exp_days = _parse_int_value(expected)
-    act_days = _parse_int_value(actual)
+    exp_days = _parse_lead_time_days(expected)
+    act_days = _parse_lead_time_days(actual)
     if exp_days is None:
         return 0.0, "Invalid expected lead time"
     if act_days is None:
@@ -242,6 +292,40 @@ def _score_validity_date(expected: Any, actual: Any) -> tuple[float, str]:
     return 0.0, f"Date mismatch ({act_date} vs {exp_date})"
 
 
+def _normalize_payment_terms(value: str) -> str:
+    s = value.lower().strip()
+    s = s.replace("pct", "%").replace("percent", "%")
+    s = s.replace("  ", " ")
+    s = re.sub(r"[,;]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _score_payment_terms(expected: Any, actual: Any) -> tuple[float, str]:
+    if _is_empty(expected):
+        if _is_empty(actual):
+            return 1.0, "exact"
+        return 0.0, "missing"
+    if _is_empty(actual):
+        return 0.0, "missing"
+
+    exp = _normalize_payment_terms(str(expected))
+    act = _normalize_payment_terms(str(actual))
+    if exp == act:
+        return 1.0, "exact"
+    if exp in act:
+        return 1.0, "exact (preserved detail)"
+    if act in exp:
+        return 0.8, "partial (substring)"
+
+    ratio = SequenceMatcher(None, exp, act).ratio()
+    if ratio >= 0.85:
+        return 0.8, f"partial ({ratio:.2f})"
+    if ratio >= 0.60:
+        return 0.5, f"partial ({ratio:.2f})"
+    return 0.0, "wrong"
+
+
 def _score_fuzzy_string(expected: Any, actual: Any) -> tuple[float, str]:
     exp = _normalize(expected)
     act = _normalize(actual)
@@ -259,42 +343,25 @@ def _score_fuzzy_string(expected: Any, actual: Any) -> tuple[float, str]:
     return 0.0, f"No match ({ratio:.2f})"
 
 
-def _line_item_dict(item: Any) -> dict[str, Any]:
-    if isinstance(item, dict):
-        return item
-    return item.model_dump() if hasattr(item, "model_dump") else {}
+def _expected_line_item_count(expected: Any) -> int | None:
+    if isinstance(expected, int):
+        return expected
+    if isinstance(expected, dict) and "expected_count" in expected:
+        return int(expected["expected_count"])
+    if isinstance(expected, list):
+        return len(expected)
+    return None
 
 
 def _score_line_items(expected: Any, actual: Any) -> tuple[float, str]:
-    expected_items = expected if isinstance(expected, list) else []
-    extracted_items = actual if isinstance(actual, list) else []
-    if not expected_items:
+    expected_count = _expected_line_item_count(expected)
+    if expected_count is None or expected_count <= 0:
         return 1.0, "No expected line items"
 
-    extracted = [_line_item_dict(i) for i in extracted_items]
-    per_item_scores: list[float] = []
-
-    for exp_raw in expected_items:
-        exp = _line_item_dict(exp_raw)
-        exp_sku = _normalize(exp.get("sku"))
-        exp_qty = exp.get("quantity")
-        best = 0.0
-        for ext in extracted:
-            sku_score = 1.0 if exp_sku and _normalize(ext.get("sku")) == exp_sku else 0.0
-            ext_qty = ext.get("quantity")
-            qty_score = (
-                1.0
-                if exp_qty is not None
-                and ext_qty is not None
-                and float(ext_qty) == float(exp_qty)
-                else 0.0
-            )
-            best = max(best, (sku_score + qty_score) / 2)
-        per_item_scores.append(best)
-
-    avg = sum(per_item_scores) / len(per_item_scores)
-    matched = sum(1 for s in per_item_scores if s > 0)
-    return avg, f"{matched}/{len(expected_items)} items matched"
+    extracted_items = actual if isinstance(actual, list) else []
+    extracted_count = len(extracted_items)
+    score = min(1.0, extracted_count / expected_count)
+    return score, f"{extracted_count}/{expected_count} items"
 
 
 def _score_field(field_name: str, expected: Any, actual: Any) -> tuple[float, str]:
@@ -311,7 +378,7 @@ def _score_field(field_name: str, expected: Any, actual: Any) -> tuple[float, st
     if field_name == "line_items":
         return _score_line_items(expected, actual)
     if field_name == "payment_terms":
-        return _score_fuzzy_string(expected, actual)
+        return _score_payment_terms(expected, actual)
     return 0.0, f"Unknown field: {field_name}"
 
 

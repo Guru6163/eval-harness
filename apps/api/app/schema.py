@@ -7,11 +7,8 @@ import uuid
 from sqlalchemy import inspect, select, text
 
 from app.db import SessionLocal, engine
-from app.extraction import DEFAULT_SYSTEM_PROMPT
 from app.models import Base, Prompt
-
-NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-DEFAULT_PROMPT_ID = str(uuid.uuid5(NAMESPACE, "prompt:default-v1"))
+from app.prompt_templates import STRONG_V2_ID, STRONG_V2_PROMPT
 
 
 def ensure_schema() -> None:
@@ -41,9 +38,9 @@ def ensure_schema() -> None:
         if not has_prompt:
             db.add(
                 Prompt(
-                    id=DEFAULT_PROMPT_ID,
-                    name="Default v1",
-                    content=DEFAULT_SYSTEM_PROMPT,
+                    id=STRONG_V2_ID,
+                    name="Strong V2",
+                    content=STRONG_V2_PROMPT,
                     is_active=True,
                 )
             )
