@@ -84,6 +84,7 @@ All documents in ExtractBench are **synthetic**. They are modeled on real patter
 1. Deploy `apps/api` with Python 3.11.
 2. Set environment variables:
    - `OPENAI_API_KEY` — required for extractions.
+   - `CORS_ORIGINS` — optional comma-separated frontend origins (default `http://localhost:3000`). The API also allows `*.vercel.app` and `*.up.railway.app` via `CORS_ORIGIN_REGEX` so Vercel/Railway deploys work without extra config; set `CORS_ORIGINS` if you use a custom domain.
 3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 4. On first deploy, run the seed and eval once (SSH or one-off job):
    ```bash

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -53,9 +54,21 @@ def _apply_schema_updates() -> None:
     ensure_schema()
 
 
+_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+# Vercel and Railway preview/production frontends (override via CORS_ORIGIN_REGEX).
+_cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://.*\.(vercel\.app|up\.railway\.app)",
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_cors_origins,
+    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
