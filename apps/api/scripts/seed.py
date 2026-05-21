@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import argparse
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -453,9 +455,26 @@ Net 3O
 ]
 
 
-def seed() -> None:
-    Base.metadata.drop_all(bind=engine)
+def seed(*, reset: bool = False) -> None:
     Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    try:
+        doc_count = db.scalar(select(func.count()).select_from(Document)) or 0
+        if not reset and doc_count >= len(DOCUMENTS):
+            print(f"Already seeded ({doc_count} documents), skipping")
+            return
+        if not reset and 0 < doc_count < len(DOCUMENTS):
+            raise RuntimeError(
+                f"Partial seed detected ({doc_count}/{len(DOCUMENTS)} documents). "
+                "Re-run with SEED_RESET=1 or: python scripts/seed.py --reset"
+            )
+    finally:
+        db.close()
+
+    if reset:
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     ground_truth_count = 0
@@ -528,4 +547,12 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop all tables and reseed (also enabled by SEED_RESET=1)",
+    )
+    args = parser.parse_args()
+    reset = args.reset or os.getenv("SEED_RESET", "").lower() in ("1", "true", "yes")
+    seed(reset=reset)

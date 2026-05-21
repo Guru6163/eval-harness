@@ -85,13 +85,12 @@ All documents in ExtractBench are **synthetic**. They are modeled on real patter
 2. Set environment variables:
    - `OPENAI_API_KEY` — required for extractions.
    - `CORS_ORIGINS` — optional comma-separated frontend origins (default `http://localhost:3000`). The API also allows `*.vercel.app` and `*.up.railway.app` via `CORS_ORIGIN_REGEX` so Vercel/Railway deploys work without extra config; set `CORS_ORIGINS` if you use a custom domain.
-3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. On first deploy, run the seed and eval once (SSH or one-off job):
+3. Start command (configured in `apps/api/railway.json`): seeds documents when the DB is empty, then starts the API.
+4. Run extractions once (SSH or one-off job) if you want scored results in the dashboard:
    ```bash
-   python scripts/seed.py
    python scripts/run_eval.py
    ```
-5. Persist the `extractbench.db` volume between deploys if you want scores to survive restarts.
+5. Persist the `extractbench.db` volume between deploys if you want scores to survive restarts. Set `SEED_RESET=1` on Railway to wipe and reseed documents on every deploy.
 
 See `.env.example` at the repo root for all variables.
 
