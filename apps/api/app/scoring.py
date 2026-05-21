@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, TYPE_CHECKING
+
+from dateutil import parser as date_parser
 
 from app.models import ExtractionRun, FieldScore, GroundTruth, MatchType
 
@@ -21,6 +24,29 @@ if TYPE_CHECKING:
 
 FUZZY_THRESHOLD = 0.85
 FUZZY_PARTIAL_THRESHOLD = 0.70
+VENDOR_FUZZY_THRESHOLD = 0.80
+
+_CURRENCY_SYMBOLS = re.compile(r"[$€£¥]")
+_VENDOR_SUFFIXES = re.compile(
+    r"\b(?:inc\.?|llc|ltd\.?|co\.?|corp\.?)\s*$", re.IGNORECASE
+)
+
+_CURRENCY_ALIASES: dict[str, str] = {
+    "usd": "USD",
+    "us dollar": "USD",
+    "us dollars": "USD",
+    "dollar": "USD",
+    "dollars": "USD",
+    "eur": "EUR",
+    "euro": "EUR",
+    "euros": "EUR",
+    "gbp": "GBP",
+    "pound": "GBP",
+    "pounds": "GBP",
+    "british pound": "GBP",
+    "jpy": "JPY",
+    "yen": "JPY",
+}
 
 
 def _levenshtein_ratio(a: str, b: str) -> float:
@@ -52,35 +78,111 @@ def _normalize(value: Any) -> str:
     return str(value).strip().lower()
 
 
+def _is_empty(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
 def _match_type(score: float, expected: Any, actual: Any) -> MatchType:
     if score >= 1.0:
         return MatchType.exact
     if score > 0:
         return MatchType.partial
-    if actual in (None, "", [], {}):
+    if _is_empty(actual):
         return MatchType.missing
     return MatchType.wrong
 
 
+def _parse_amount(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    text = _CURRENCY_SYMBOLS.sub("", text)
+    text = text.replace(",", "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _normalize_vendor(name: str) -> str:
+    s = name.strip().lower()
+    s = _VENDOR_SUFFIXES.sub("", s).strip()
+    return re.sub(r"\s+", " ", s)
+
+
+def _normalize_currency(value: Any) -> str:
+    if _is_empty(value):
+        return ""
+    raw = str(value).strip()
+    key = raw.lower()
+    if key in _CURRENCY_ALIASES:
+        return _CURRENCY_ALIASES[key]
+    return raw.upper()
+
+
+def _parse_int_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return int(float(text.replace(",", "")))
+    except ValueError:
+        return None
+
+
+def _parse_calendar_date(value: Any) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return date_parser.parse(text, dayfirst=False).date()
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
 def _score_vendor(expected: Any, actual: Any) -> tuple[float, str]:
-    exp = _normalize(expected)
-    act = _normalize(actual)
-    if not exp:
+    if _is_empty(expected):
         return 1.0, "No expected vendor"
+    if _is_empty(actual):
+        return 0.0, "Missing vendor"
+
+    exp = _normalize_vendor(str(expected))
+    act = _normalize_vendor(str(actual))
     if exp == act:
         return 1.0, "Exact match"
     ratio = _levenshtein_ratio(exp, act)
-    if ratio > FUZZY_THRESHOLD:
+    if ratio > VENDOR_FUZZY_THRESHOLD:
         return 0.7, f"Fuzzy match ({ratio:.2f})"
     return 0.0, f"No match ({ratio:.2f})"
 
 
 def _score_total_amount(expected: Any, actual: Any) -> tuple[float, str]:
-    try:
-        exp_val = float(expected)
-        act_val = float(actual)
-    except (TypeError, ValueError):
-        return 0.0, "Invalid numeric values"
+    exp_val = _parse_amount(expected)
+    act_val = _parse_amount(actual)
+    if exp_val is None or act_val is None:
+        return 0.0, "Missing amount"
     if exp_val == 0:
         return (1.0, "Both zero") if act_val == 0 else (0.0, "Expected zero")
     diff_pct = abs(act_val - exp_val) / abs(exp_val) * 100
@@ -92,26 +194,52 @@ def _score_total_amount(expected: Any, actual: Any) -> tuple[float, str]:
 
 
 def _score_currency(expected: Any, actual: Any) -> tuple[float, str]:
-    if _normalize(expected) == _normalize(actual) and _normalize(expected):
+    exp = _normalize_currency(expected)
+    act = _normalize_currency(actual)
+    if not exp:
+        return 1.0, "No expected currency"
+    if not act:
+        return 0.0, "Missing currency"
+    if exp == act:
         return 1.0, "Exact match"
-    return 0.0, "Mismatch"
+    return 0.0, f"Mismatch ({act} vs {exp})"
 
 
 def _score_lead_time(expected: Any, actual: Any) -> tuple[float, str]:
     if expected is None:
-        return 1.0, "Not required"
-    try:
-        exp_days = int(expected)
-        act_days = int(actual) if actual is not None else None
-    except (TypeError, ValueError):
-        return 0.0, "Invalid lead time"
+        if actual is None or _is_empty(actual):
+            return 1.0, "Not required"
+        return 0.0, "Hallucinated lead time"
+
+    exp_days = _parse_int_value(expected)
+    act_days = _parse_int_value(actual)
+    if exp_days is None:
+        return 0.0, "Invalid expected lead time"
     if act_days is None:
         return 0.0, "Missing lead time"
-    if exp_days == act_days:
-        return 1.0, "Exact match"
-    if abs(exp_days - act_days) <= 2:
-        return 0.7, f"Within ±2 days (Δ{abs(exp_days - act_days)})"
-    return 0.0, f"Off by {abs(exp_days - act_days)} days"
+    delta = abs(exp_days - act_days)
+    if delta <= 1:
+        return 1.0, f"Within ±1 day (Δ{delta})"
+    if delta <= 3:
+        return 0.7, f"Within ±3 days (Δ{delta})"
+    return 0.0, f"Off by {delta} days"
+
+
+def _score_validity_date(expected: Any, actual: Any) -> tuple[float, str]:
+    if _is_empty(expected):
+        return 1.0, "No expected date"
+    if _is_empty(actual):
+        return 0.0, "Missing date"
+
+    exp_date = _parse_calendar_date(expected)
+    act_date = _parse_calendar_date(actual)
+    if exp_date is None:
+        return 0.0, "Invalid expected date"
+    if act_date is None:
+        return 0.0, "Invalid extracted date"
+    if exp_date == act_date:
+        return 1.0, f"Same date ({exp_date.isoformat()})"
+    return 0.0, f"Date mismatch ({act_date} vs {exp_date})"
 
 
 def _score_fuzzy_string(expected: Any, actual: Any) -> tuple[float, str]:
@@ -119,6 +247,8 @@ def _score_fuzzy_string(expected: Any, actual: Any) -> tuple[float, str]:
     act = _normalize(actual)
     if not exp:
         return 1.0, "No expected value"
+    if not act:
+        return 0.0, "Missing value"
     if exp == act:
         return 1.0, "Exact match"
     ratio = _levenshtein_ratio(exp, act)
@@ -176,9 +306,11 @@ def _score_field(field_name: str, expected: Any, actual: Any) -> tuple[float, st
         return _score_currency(expected, actual)
     if field_name == "lead_time_days":
         return _score_lead_time(expected, actual)
+    if field_name == "validity_date":
+        return _score_validity_date(expected, actual)
     if field_name == "line_items":
         return _score_line_items(expected, actual)
-    if field_name in ("payment_terms", "validity_date"):
+    if field_name == "payment_terms":
         return _score_fuzzy_string(expected, actual)
     return 0.0, f"Unknown field: {field_name}"
 
@@ -187,8 +319,12 @@ def score_extraction(
     run: ExtractionRun,
     truth: list[GroundTruth],
     db: Session | None = None,
+    *,
+    replace_existing: bool = False,
 ) -> list[FieldScore]:
     """Score an extraction run against ground truth and persist FieldScore rows."""
+    from sqlalchemy import delete
+
     from app.db import SessionLocal
 
     owns_session = db is None
@@ -196,6 +332,11 @@ def score_extraction(
         db = SessionLocal()
 
     assert db is not None
+    if replace_existing:
+        db.execute(delete(FieldScore).where(FieldScore.run_id == run.id))
+        db.flush()
+        db.expire(run, ["field_scores"])
+
     extracted = run.extracted_value or {}
     truth_by_field = {row.field_name: row for row in truth}
     scores: list[FieldScore] = []

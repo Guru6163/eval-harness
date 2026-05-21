@@ -45,6 +45,7 @@ class FieldScoreOut(BaseModel):
 class ExtractionRunOut(BaseModel):
     id: str
     document_id: str
+    prompt_id: str | None = None
     model_name: str
     extracted_value: dict[str, Any]
     latency_ms: int
@@ -93,3 +94,91 @@ class RunAllSummaryOut(BaseModel):
     runs_created: int
     average_score: float | None
     results: list[ExtractionRunOut]
+
+
+class RunAllStartOut(BaseModel):
+    status: str
+    prompt_id: str
+
+
+class RunProgressOut(BaseModel):
+    completed: int
+    total: int
+    status: str
+
+
+class PromptCreate(BaseModel):
+    name: str
+    content: str
+
+
+class PromptOut(BaseModel):
+    id: str
+    name: str
+    content: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PromptSummaryOut(BaseModel):
+    id: str
+    name: str
+    is_active: bool
+    overall_accuracy: float | None
+    document_count: int
+
+
+class ComparisonFieldOut(BaseModel):
+    field_name: str
+    accuracy_a: float | None
+    accuracy_b: float | None
+    delta: float | None
+
+
+class ComparisonDocumentOut(BaseModel):
+    document_id: str
+    filename: str
+    score_a: float | None
+    score_b: float | None
+    delta: float | None
+
+
+class ComparisonOut(BaseModel):
+    prompt_a: PromptSummaryOut
+    prompt_b: PromptSummaryOut
+    overall_accuracy_a: float | None
+    overall_accuracy_b: float | None
+    overall_delta: float | None
+    fields: list[ComparisonFieldOut]
+    documents: list[ComparisonDocumentOut]
+
+
+class PromptAccuracySummary(BaseModel):
+    prompt_id: str | None
+    prompt_name: str
+    runs_rescored: int
+    overall_accuracy: float | None
+
+
+class RescoreOut(BaseModel):
+    runs_rescored: int
+    by_prompt: list[PromptAccuracySummary]
+
+
+class FieldDebugRow(BaseModel):
+    document_id: str
+    filename: str
+    expected: Any
+    extracted: Any
+    score: float
+    match_type: MatchType
+    notes: str | None = None
+
+
+class FieldDebugOut(BaseModel):
+    field_name: str
+    prompt_id: str
+    prompt_name: str
+    rows: list[FieldDebugRow]

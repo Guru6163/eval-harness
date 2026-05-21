@@ -12,6 +12,8 @@ const GITHUB_URL =
 const LINKS = [
   { href: "/#documents", label: "Documents", match: (p: string) => p === "/" },
   { href: "/analysis", label: "Analysis", match: (p: string) => p.startsWith("/analysis") },
+  { href: "/comparison", label: "Comparison", match: (p: string) => p.startsWith("/comparison") },
+  { href: "/prompt", label: "Prompt", match: (p: string) => p.startsWith("/prompt") },
 ];
 
 export function SiteNav() {

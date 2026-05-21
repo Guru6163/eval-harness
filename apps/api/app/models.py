@@ -86,6 +86,24 @@ class GroundTruth(Base):
     document: Mapped["Document"] = relationship(back_populates="ground_truths")
 
 
+class Prompt(Base):
+    __tablename__ = "prompts"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    extraction_runs: Mapped[list["ExtractionRun"]] = relationship(
+        back_populates="prompt"
+    )
+
+
 class ExtractionRun(Base):
     __tablename__ = "extraction_runs"
 
@@ -94,6 +112,9 @@ class ExtractionRun(Base):
     )
     document_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("documents.id"), nullable=False
+    )
+    prompt_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("prompts.id"), nullable=True
     )
     model_name: Mapped[str] = mapped_column(String(128), nullable=False)
     extracted_value: Mapped[object] = mapped_column(JSON, nullable=False)
@@ -104,6 +125,7 @@ class ExtractionRun(Base):
     )
 
     document: Mapped["Document"] = relationship(back_populates="extraction_runs")
+    prompt: Mapped["Prompt | None"] = relationship(back_populates="extraction_runs")
     field_scores: Mapped[list["FieldScore"]] = relationship(
         back_populates="run", cascade="all, delete-orphan"
     )

@@ -1,6 +1,7 @@
 import { AlertCircle, Layers, Lightbulb } from "lucide-react";
 
 import { FieldBars } from "@/components/analysis/field-bars";
+import { PromptComparisonPanel } from "@/components/analysis/prompt-comparison-panel";
 import { GridBackground } from "@/components/dashboard/grid-background";
 import { SiteNav } from "@/components/site-nav";
 import { AnalysisHero } from "@/components/analysis/analysis-hero";
@@ -59,6 +60,19 @@ export default async function AnalysisPage() {
         <GridBackground />
         <main className="mx-auto max-w-6xl px-6 pb-40 md:px-8">
           <AnalysisHero />
+
+          <section className="border-t border-border py-24">
+            <h2 className="text-xs font-medium tracking-widest text-muted uppercase">
+              Compare prompts
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm text-muted">
+              Pick two saved prompt versions and compare field-level accuracy
+              across documents that have runs for both.
+            </p>
+            <div className="mt-10">
+              <PromptComparisonPanel />
+            </div>
+          </section>
 
           <Reveal as="section" className="border-t border-border py-24">
             <div className="flex items-center gap-3">

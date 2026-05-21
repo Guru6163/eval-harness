@@ -11,7 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db import SessionLocal, engine  # noqa: E402
-from app.models import Base, Document, GroundTruth  # noqa: E402
+from app.extraction import DEFAULT_SYSTEM_PROMPT  # noqa: E402
+from app.models import Base, Document, GroundTruth, Prompt  # noqa: E402
 from scripts.seed_data import DOCUMENT_SPECS, SCORED_FIELDS  # noqa: E402
 
 NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
@@ -27,6 +28,15 @@ def seed() -> None:
 
     db = SessionLocal()
     try:
+        db.add(
+            Prompt(
+                id=stable_id("prompt:default-v1"),
+                name="Default v1",
+                content=DEFAULT_SYSTEM_PROMPT,
+                is_active=True,
+            )
+        )
+
         for spec in DOCUMENT_SPECS:
             doc_id = stable_id(spec["key"])
             document = Document(

@@ -45,12 +45,21 @@ export interface GroundTruth {
 export interface ExtractionRun {
   id: string;
   document_id: string;
+  prompt_id: string | null;
   model_name: string;
   extracted_value: Record<string, unknown>;
   latency_ms: number;
   cost_usd: number;
   created_at: string;
   field_scores: FieldScore[];
+}
+
+export interface Prompt {
+  id: string;
+  name: string;
+  content: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface DocumentDetail extends Document {
@@ -96,10 +105,17 @@ export interface DashboardData {
   documents: DocumentRow[];
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, { cache: "no-store" });
+async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { cache: "no-store", ...init });
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status}`);
+    let detail = String(res.status);
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(`API ${path} failed: ${detail}`);
   }
   return res.json() as Promise<T>;
 }
@@ -114,6 +130,99 @@ export function getRuns(): Promise<RunsByDocument[]> {
 
 export function getDocument(id: string): Promise<DocumentDetail> {
   return fetchJson<DocumentDetail>(`/api/documents/${id}`);
+}
+
+export function getPrompts(): Promise<Prompt[]> {
+  return fetchJson<Prompt[]>("/api/prompts");
+}
+
+export async function getActivePrompt(): Promise<Prompt | null> {
+  const res = await fetch(`${API_URL}/api/prompts/active`, {
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`API /api/prompts/active failed: ${res.status}`);
+  }
+  return (await res.json()) as Prompt;
+}
+
+export function createPrompt(payload: {
+  name: string;
+  content: string;
+}): Promise<Prompt> {
+  return fetchJson<Prompt>("/api/prompts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function activatePrompt(promptId: string): Promise<Prompt> {
+  return fetchJson<Prompt>(`/api/prompts/${promptId}/activate`, {
+    method: "PUT",
+  });
+}
+
+export interface RunAllStart {
+  status: string;
+  prompt_id: string;
+}
+
+export interface RunProgress {
+  completed: number;
+  total: number;
+  status: "running" | "done";
+}
+
+export function triggerRunAll(promptId?: string): Promise<RunAllStart> {
+  const qs = promptId ? `?prompt_id=${encodeURIComponent(promptId)}` : "";
+  return fetchJson<RunAllStart>(`/api/runs/run-all${qs}`, { method: "POST" });
+}
+
+export function getRunProgress(promptId: string): Promise<RunProgress> {
+  return fetchJson<RunProgress>(`/api/runs/progress/${promptId}`);
+}
+
+export interface PromptSummary {
+  id: string;
+  name: string;
+  is_active: boolean;
+  overall_accuracy: number | null;
+  document_count: number;
+}
+
+export interface ComparisonField {
+  field_name: string;
+  accuracy_a: number | null;
+  accuracy_b: number | null;
+  delta: number | null;
+}
+
+export interface ComparisonDocument {
+  document_id: string;
+  filename: string;
+  score_a: number | null;
+  score_b: number | null;
+  delta: number | null;
+}
+
+export interface Comparison {
+  prompt_a: PromptSummary;
+  prompt_b: PromptSummary;
+  overall_accuracy_a: number | null;
+  overall_accuracy_b: number | null;
+  overall_delta: number | null;
+  fields: ComparisonField[];
+  documents: ComparisonDocument[];
+}
+
+export function getComparison(
+  promptA: string,
+  promptB: string
+): Promise<Comparison> {
+  const qs = new URLSearchParams({ prompt_a: promptA, prompt_b: promptB });
+  return fetchJson<Comparison>(`/api/comparison?${qs}`);
 }
 
 export async function getFieldAccuracy(): Promise<FieldAccuracy[]> {
