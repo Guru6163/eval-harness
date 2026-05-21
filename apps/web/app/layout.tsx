@@ -10,7 +10,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ExtractBench",
   description:
-    "An evaluation harness for structured extraction from messy real-world documents.",
+    "Evaluation harness measuring structured extraction accuracy across 18 real-world procurement documents.",
 };
 
 export default function RootLayout({
