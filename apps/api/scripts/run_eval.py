@@ -21,8 +21,8 @@ from app.services import average_field_score, run_extraction_and_scoring
 
 
 def main() -> None:
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        print("Error: ANTHROPIC_API_KEY is not set.", file=sys.stderr)
+    if not os.getenv("OPENAI_API_KEY"):
+        print("Error: OPENAI_API_KEY is not set.", file=sys.stderr)
         print("Copy apps/api/.env.example to apps/api/.env and add your key.", file=sys.stderr)
         sys.exit(1)
 

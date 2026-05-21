@@ -14,8 +14,8 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-  echo "Error: ANTHROPIC_API_KEY is not set."
+if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+  echo "Error: OPENAI_API_KEY is not set."
   echo "  cp apps/api/.env.example apps/api/.env"
   echo "  # then add your key"
   exit 1
@@ -25,7 +25,7 @@ echo "==> Seeding database..."
 python3 scripts/seed.py
 
 echo ""
-echo "==> Running extractions (this calls the Anthropic API)..."
+echo "==> Running extractions (this calls the OpenAI API)..."
 python3 scripts/run_eval.py
 
 echo ""

@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING
 
-from anthropic import Anthropic
+from openai import OpenAI
 from pydantic import ValidationError
 
 from app.db import SessionLocal
@@ -16,11 +16,11 @@ from app.schemas import ExtractedFields, ExtractionResult
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-MODEL_NAME = "claude-sonnet-4-20250514"
+MODEL_NAME = "gpt-4o"
 
-# Claude Sonnet pricing (USD per million tokens)
-INPUT_COST_PER_MTOK = 3.0
-OUTPUT_COST_PER_MTOK = 15.0
+# GPT-4o pricing (USD per million tokens) — openai.com/api/pricing
+INPUT_COST_PER_MTOK = 2.5
+OUTPUT_COST_PER_MTOK = 10.0
 
 SYSTEM_PROMPT = """You extract structured procurement fields from messy business documents.
 Return ONLY a single JSON object with no markdown fences and no commentary.
@@ -78,27 +78,32 @@ def _parse_json_payload(text: str) -> dict:
     return json.loads(cleaned)
 
 
+def _messages(doc: Document, extra: str = "") -> list[dict[str, str]]:
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": _user_message(doc) + extra},
+    ]
+
+
 def _extract_with_instructor(
-    client: Anthropic, doc: Document
+    client: OpenAI, doc: Document
 ) -> tuple[ExtractedFields, int, int]:
     import instructor
 
-    patched = instructor.from_anthropic(client)
-    fields, completion = patched.messages.create_with_completion(
+    patched = instructor.from_openai(client)
+    fields, completion = patched.chat.completions.create_with_completion(
         model=MODEL_NAME,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": _user_message(doc)}],
+        messages=_messages(doc),
         response_model=ExtractedFields,
     )
     usage = completion.usage
-    return fields, usage.input_tokens, usage.output_tokens
+    assert usage is not None
+    return fields, usage.prompt_tokens, usage.completion_tokens
 
 
 def _extract_with_manual_json(
-    client: Anthropic, doc: Document
+    client: OpenAI, doc: Document
 ) -> tuple[ExtractedFields, int, int]:
-    user_content = _user_message(doc)
     last_error: Exception | None = None
 
     for attempt in range(2):
@@ -108,27 +113,25 @@ def _extract_with_manual_json(
                 "\n\nYour previous response was invalid. "
                 "Reply with ONLY valid JSON matching the schema."
             )
-        response = client.messages.create(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content + extra}],
+            messages=_messages(doc, extra),
+            response_format={"type": "json_object"},
         )
-        text = "".join(
-            block.text for block in response.content if block.type == "text"
-        )
+        text = response.choices[0].message.content or ""
         try:
             payload = _parse_json_payload(text)
             fields = ExtractedFields.model_validate(payload)
             usage = response.usage
-            return fields, usage.input_tokens, usage.output_tokens
+            assert usage is not None
+            return fields, usage.prompt_tokens, usage.completion_tokens
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = exc
 
     raise ValueError(f"Failed to parse extraction JSON: {last_error}") from last_error
 
 
-def _call_model(client: Anthropic, doc: Document) -> tuple[ExtractedFields, int, int]:
+def _call_model(client: OpenAI, doc: Document) -> tuple[ExtractedFields, int, int]:
     try:
         import instructor  # noqa: F401
 
@@ -140,13 +143,13 @@ def _call_model(client: Anthropic, doc: Document) -> tuple[ExtractedFields, int,
 def extract_document(
     doc: Document, db: Session | None = None
 ) -> ExtractionResult:
-    """Run Claude extraction and persist an ExtractionRun row."""
+    """Run OpenAI extraction and persist an ExtractionRun row."""
     owns_session = db is None
     if owns_session:
         db = SessionLocal()
 
     assert db is not None
-    client = Anthropic()
+    client = OpenAI()
     started = time.perf_counter()
     fields, input_tokens, output_tokens = _call_model(client, doc)
     latency_ms = int((time.perf_counter() - started) * 1000)

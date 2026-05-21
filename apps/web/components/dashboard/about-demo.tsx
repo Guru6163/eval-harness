@@ -13,7 +13,7 @@ export function AboutDemoPanel() {
         </p>
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted">
           Each document is scored against hand-authored ground truth for seven
-          fields. Extraction uses Claude Sonnet with a fixed JSON schema;
+          fields. Extraction uses GPT-4o with a fixed JSON schema;
           accuracy is computed with deterministic rules (exact match, fuzzy
           strings, tolerance bands) so results are reproducible. Run{" "}
           <code className="font-mono text-xs text-ink">

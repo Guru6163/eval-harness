@@ -56,7 +56,7 @@ export default async function Home() {
             Extraction accuracy across 18 documents
           </h1>
           <p className="mt-6 max-w-2xl text-lg text-muted">
-            Measures how reliably Claude extracts structured procurement fields
+            Measures how reliably GPT-4o extracts structured procurement fields
             from messy supplier quotes, customer requests, and purchase orders.
           </p>
           {error ? (

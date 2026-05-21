@@ -8,24 +8,24 @@ Production extraction is not a single prompt problem. Real inputs arrive as scan
 
 An eval harness turns extraction into something you can regression-test. You define ground truth per field, run the same model across a fixed corpus, score outcomes with explicit rules, and compare runs over time. That makes it possible to justify model choices, catch regressions when prompts change, and prioritize engineering work on the formats that actually hurt accuracy.
 
-ExtractBench is a minimal reference implementation of that loop: eighteen synthetic documents, seven scored fields, Claude-based extraction, and a simple web dashboard for results.
+ExtractBench is a minimal reference implementation of that loop: eighteen synthetic documents, seven scored fields, OpenAI-based extraction, and a simple web dashboard for results.
 
 ## How it works
 
 1. **Documents** — Eighteen plain-text fixtures (supplier quotes, customer RFQs, purchase orders) with deliberate messiness: OCR noise, tiered pricing, VAT in prose, ambiguous references.
 2. **Ground truth** — Per-document expected values for `vendor_name`, `line_items`, `total_amount`, `currency`, `lead_time_days`, `payment_terms`, and `validity_date`.
-3. **Extraction** — Claude Sonnet (`claude-sonnet-4-20250514`) returns JSON matching a strict schema; runs are stored with latency and estimated cost.
+3. **Extraction** — GPT-4o (`gpt-4o`) returns JSON matching a strict schema; runs are stored with latency and estimated cost.
 4. **Scoring** — Field-level rules (exact match, fuzzy strings, tolerance on amounts and lead times, per-line-item checks) produce scores and match types.
 5. **Analysis** — The Next.js app aggregates accuracy by document type and field, with per-document expected-vs-extracted views.
 
 ## Running locally
 
-**Prerequisites:** Node 20+, Python 3.11+, an [Anthropic API key](https://console.anthropic.com/).
+**Prerequisites:** Node 20+, Python 3.11+, an [OpenAI API key](https://platform.openai.com/api-keys).
 
 ```bash
 # 1. API setup
 cd apps/api
-cp .env.example .env          # add ANTHROPIC_API_KEY
+cp .env.example .env          # add OPENAI_API_KEY
 pip install -e .                # or: uv sync
 
 # 2. Full eval pipeline (seed + extract all + summary)
@@ -53,7 +53,7 @@ curl -X POST http://localhost:8000/api/runs/{document_id}
 
 | Choice | Rationale |
 |--------|-----------|
-| **Claude Sonnet** | Strong structured-output quality at a lower cost than Opus; good default for high-volume document extraction evals. |
+| **GPT-4o** | Strong structured-output quality and native JSON mode; widely available and predictable for document extraction evals. |
 | **SQLite** | Zero-ops persistence; recipients can clone, run, and inspect `extractbench.db` without Docker or Postgres. |
 | **FastAPI** | Thin API layer with automatic OpenAPI docs and straightforward SQLAlchemy integration. |
 | **Next.js 15 (App Router)** | Server components fetch eval results without exposing API keys to the browser. |
@@ -83,7 +83,7 @@ All documents in ExtractBench are **synthetic**. They are modeled on real patter
 
 1. Deploy `apps/api` with Python 3.11.
 2. Set environment variables:
-   - `ANTHROPIC_API_KEY` — required for extractions.
+   - `OPENAI_API_KEY` — required for extractions.
 3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 4. On first deploy, run the seed and eval once (SSH or one-off job):
    ```bash
