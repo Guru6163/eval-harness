@@ -1,3 +1,5 @@
+import { FIELD_LABELS, SCORED_FIELDS } from "@/lib/fields";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const FIELDS_PER_DOCUMENT = 7;
@@ -23,6 +25,23 @@ export interface Document {
   latest_run_id: string | null;
 }
 
+export type MatchType = "exact" | "partial" | "missing" | "wrong";
+
+export interface FieldScore {
+  id: string;
+  field_name: string;
+  score: number;
+  match_type: MatchType;
+  notes: string | null;
+}
+
+export interface GroundTruth {
+  id: string;
+  field_name: string;
+  expected_value: unknown;
+  is_required: boolean;
+}
+
 export interface ExtractionRun {
   id: string;
   document_id: string;
@@ -31,7 +50,20 @@ export interface ExtractionRun {
   latency_ms: number;
   cost_usd: number;
   created_at: string;
-  field_scores: { field_name: string; score: number }[];
+  field_scores: FieldScore[];
+}
+
+export interface DocumentDetail extends Document {
+  raw_content: string;
+  ground_truths: GroundTruth[];
+  extraction_runs: ExtractionRun[];
+  notes?: string | null;
+}
+
+export interface FieldAccuracy {
+  field: string;
+  label: string;
+  accuracyPercent: number | null;
 }
 
 export interface RunsByDocument {
@@ -78,6 +110,43 @@ export function getDocuments(): Promise<Document[]> {
 
 export function getRuns(): Promise<RunsByDocument[]> {
   return fetchJson<RunsByDocument[]>("/api/runs");
+}
+
+export function getDocument(id: string): Promise<DocumentDetail> {
+  return fetchJson<DocumentDetail>(`/api/documents/${id}`);
+}
+
+export async function getFieldAccuracy(): Promise<FieldAccuracy[]> {
+  const runsGrouped = await getRuns();
+  const buckets: Record<string, number[]> = {};
+
+  for (const field of SCORED_FIELDS) {
+    buckets[field] = [];
+  }
+
+  for (const group of runsGrouped) {
+    const latest = group.runs[0];
+    if (!latest) continue;
+    for (const fs of latest.field_scores) {
+      if (buckets[fs.field_name]) {
+        buckets[fs.field_name].push(fs.score);
+      }
+    }
+  }
+
+  return SCORED_FIELDS.map((field) => {
+    const scores = buckets[field];
+    return {
+      field,
+      label: FIELD_LABELS[field],
+      accuracyPercent:
+        scores.length > 0
+          ? Math.round(
+              (scores.reduce((a, b) => a + b, 0) / scores.length) * 100
+            )
+          : null,
+    };
+  });
 }
 
 export function scoreToStatus(score: number | null): DocumentStatus {

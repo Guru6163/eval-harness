@@ -1,21 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DocPill } from "@/components/documents/doc-pill";
+import {
+  buildFieldRows,
+  FieldComparison,
+} from "@/components/documents/field-comparison";
 import { SiteNav } from "@/components/site-nav";
-import { formatDocType, formatSourceFormat, scoreToStatus } from "@/lib/api";
+import { resolveFailureAnalysis } from "@/lib/document-analysis";
+import {
+  formatDocType,
+  formatSourceFormat,
+  getDocument,
+} from "@/lib/api";
+import { derivedTitle } from "@/lib/fields";
 
 export const dynamic = "force-dynamic";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-async function getDocument(id: string) {
-  const res = await fetch(`${API_URL}/api/documents/${id}`, {
-    cache: "no-store",
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to load document");
-  return res.json();
-}
 
 export default async function DocumentPage({
   params,
@@ -23,53 +23,88 @@ export default async function DocumentPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const doc = await getDocument(id);
-  if (!doc) notFound();
+  let doc;
+  try {
+    doc = await getDocument(id);
+  } catch {
+    notFound();
+  }
 
+  const latestRun = doc.extraction_runs[0] ?? null;
   const accuracy =
     doc.latest_score !== null ? Math.round(doc.latest_score * 100) : null;
-  const status = scoreToStatus(doc.latest_score);
+  const fieldRows = buildFieldRows(doc.ground_truths, latestRun);
+  const failureAnalysis = resolveFailureAnalysis(
+    doc.id,
+    doc.notes,
+    latestRun?.field_scores ?? []
+  );
 
   return (
     <>
       <SiteNav />
-      <main className="mx-auto max-w-5xl px-8 py-16 pb-32">
-        <Link
-          href="/#documents"
-          className="text-sm text-muted transition-colors hover:text-ink"
-        >
-          ← All documents
-        </Link>
-        <h1 className="mt-8 text-3xl font-medium tracking-tight text-ink">
-          {doc.filename}
-        </h1>
-        <dl className="mt-8 grid grid-cols-2 gap-6 text-sm md:grid-cols-4">
-          <div>
-            <dt className="text-muted">Type</dt>
-            <dd className="mt-1 text-ink">{formatDocType(doc.doc_type)}</dd>
+      <main className="pb-32">
+        <header className="mx-auto max-w-6xl px-8 py-16">
+          <nav className="text-sm text-muted">
+            <Link href="/#documents" className="transition-colors hover:text-ink">
+              Documents
+            </Link>
+            <span className="mx-2">/</span>
+            <span className="text-ink">{doc.filename}</span>
+          </nav>
+          <h1 className="mt-6 text-3xl font-medium tracking-tight text-ink">
+            {derivedTitle(doc.filename)}
+          </h1>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <DocPill>{formatDocType(doc.doc_type)}</DocPill>
+            <DocPill>{formatSourceFormat(doc.source_format)}</DocPill>
+            <DocPill>
+              {accuracy !== null
+                ? `${accuracy}% accuracy`
+                : "Not evaluated"}
+            </DocPill>
           </div>
-          <div>
-            <dt className="text-muted">Format</dt>
-            <dd className="mt-1 text-ink">
-              {formatSourceFormat(doc.source_format)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">Accuracy</dt>
-            <dd className="mt-1 tabular-nums text-ink">
-              {accuracy !== null ? `${accuracy}%` : "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted">Status</dt>
-            <dd className="mt-1 text-ink">{status}</dd>
-          </div>
-        </dl>
-        <section className="mt-16 border-t border-border pt-12">
-          <h2 className="text-sm font-medium text-ink">Document text</h2>
-          <pre className="mt-6 whitespace-pre-wrap font-sans text-sm leading-relaxed text-ink/90">
-            {doc.raw_content}
-          </pre>
+        </header>
+
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-8 md:grid-cols-2">
+          <section>
+            <p className="text-xs font-medium tracking-widest text-muted uppercase">
+              Source document
+            </p>
+            <div className="mt-4 border border-border p-8">
+              <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed text-ink">
+                {doc.raw_content}
+              </pre>
+            </div>
+          </section>
+
+          <section>
+            <p className="text-xs font-medium tracking-widest text-muted uppercase">
+              Extraction result
+            </p>
+            <div className="mt-4">
+              {latestRun ? (
+                <FieldComparison rows={fieldRows} />
+              ) : (
+                <p className="text-sm text-muted">
+                  No extraction run yet. POST to{" "}
+                  <code className="font-mono text-xs">
+                    /api/runs/{doc.id}
+                  </code>{" "}
+                  to evaluate.
+                </p>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <section className="mx-auto mt-20 max-w-6xl border-t border-border px-8 pt-16">
+          <h2 className="text-2xl font-medium tracking-tight text-ink">
+            Failure analysis
+          </h2>
+          <p className="mt-6 max-w-3xl text-base leading-relaxed text-ink/90">
+            {failureAnalysis}
+          </p>
         </section>
       </main>
     </>
