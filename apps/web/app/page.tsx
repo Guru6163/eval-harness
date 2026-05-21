@@ -1,3 +1,4 @@
+import { AboutDemoPanel } from "@/components/dashboard/about-demo";
 import { DocumentsTable } from "@/components/dashboard/documents-table";
 import { StatsRow } from "@/components/dashboard/stats-row";
 import { TypeAccuracySection } from "@/components/dashboard/type-accuracy";
@@ -76,6 +77,7 @@ export default async function Home() {
 
         <TypeAccuracySection items={data.byDocType} />
         <DocumentsTable documents={data.documents} />
+        <AboutDemoPanel />
       </main>
     </>
   );

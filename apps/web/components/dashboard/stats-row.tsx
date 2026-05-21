@@ -7,7 +7,7 @@ interface StatProps {
 function Stat({ value, label, bordered }: StatProps) {
   return (
     <div
-      className={`flex flex-col gap-2 py-2 ${bordered ? "border-l border-border pl-10" : ""}`}
+      className={`flex flex-col gap-2 py-2 ${bordered ? "md:border-l md:border-border md:pl-10" : ""}`}
     >
       <span className="text-4xl font-medium tabular-nums tracking-tight text-ink">
         {value}
@@ -33,7 +33,7 @@ export function StatsRow({
   avgLatencySec,
 }: StatsRowProps) {
   return (
-    <div className="mt-16 grid grid-cols-2 gap-x-8 gap-y-10 md:grid-cols-4">
+    <div className="mt-16 grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 md:grid-cols-4">
       <Stat
         value={
           overallAccuracy !== null ? `${overallAccuracy}%` : "—"

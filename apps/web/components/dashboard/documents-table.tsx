@@ -42,7 +42,8 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
       <h2 className="text-sm font-medium tracking-wide text-ink">
         All documents
       </h2>
-      <Table className="mt-10">
+      <div className="mt-10 overflow-x-auto">
+      <Table>
         <TableHeader>
           <TableRow className="border-b border-border hover:bg-transparent">
             <TableHead>Document</TableHead>
@@ -84,6 +85,7 @@ export function DocumentsTable({ documents }: DocumentsTableProps) {
           ))}
         </TableBody>
       </Table>
+      </div>
     </section>
   );
 }

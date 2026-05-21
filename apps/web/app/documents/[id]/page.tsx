@@ -59,9 +59,13 @@ export default async function DocumentPage({
             <DocPill>{formatDocType(doc.doc_type)}</DocPill>
             <DocPill>{formatSourceFormat(doc.source_format)}</DocPill>
             <DocPill>
-              {accuracy !== null
-                ? `${accuracy}% accuracy`
-                : "Not evaluated"}
+              {accuracy !== null ? (
+                <>
+                  <span className="tabular-nums">{accuracy}%</span> accuracy
+                </>
+              ) : (
+                "Not evaluated"
+              )}
             </DocPill>
           </div>
         </header>

@@ -94,8 +94,8 @@ export default async function AnalysisPage() {
                   className="border-b border-border hover:bg-transparent"
                 >
                   <TableCell className="text-ink">{row.mode}</TableCell>
-                  <TableCell className="text-right tabular-nums text-muted">
-                    {row.count}
+                  <TableCell className="text-right text-muted">
+                    <span className="tabular-nums">{row.count}</span>
                   </TableCell>
                   <TableCell className="text-muted">{row.example}</TableCell>
                 </TableRow>

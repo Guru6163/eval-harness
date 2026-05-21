@@ -52,7 +52,7 @@ export function FieldComparison({ rows }: FieldComparisonProps) {
               </span>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-6">
+          <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
             <div>
               <p className="text-xs tracking-wide text-muted uppercase">
                 Expected

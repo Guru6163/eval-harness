@@ -1,22 +1,103 @@
 # ExtractBench
 
-An evaluation harness for structured extraction from messy real-world documents.
+A small evaluation harness that measures how reliably LLMs extract structured procurement fields from messy business documents.
 
-## Apps
+## Why this exists
 
-### Web (`apps/web`)
+Production extraction is not a single prompt problem. Real inputs arrive as scanned PDFs, forwarded email threads, and spreadsheet exports where prices sit in prose, currencies mix, and “the usual” SKUs never appear verbatim. Without a repeatable eval loop, teams ship on anecdotal wins and discover failure modes only after customers do.
+
+An eval harness turns extraction into something you can regression-test. You define ground truth per field, run the same model across a fixed corpus, score outcomes with explicit rules, and compare runs over time. That makes it possible to justify model choices, catch regressions when prompts change, and prioritize engineering work on the formats that actually hurt accuracy.
+
+ExtractBench is a minimal reference implementation of that loop: eighteen synthetic documents, seven scored fields, Claude-based extraction, and a simple web dashboard for results.
+
+## How it works
+
+1. **Documents** — Eighteen plain-text fixtures (supplier quotes, customer RFQs, purchase orders) with deliberate messiness: OCR noise, tiered pricing, VAT in prose, ambiguous references.
+2. **Ground truth** — Per-document expected values for `vendor_name`, `line_items`, `total_amount`, `currency`, `lead_time_days`, `payment_terms`, and `validity_date`.
+3. **Extraction** — Claude Sonnet (`claude-sonnet-4-20250514`) returns JSON matching a strict schema; runs are stored with latency and estimated cost.
+4. **Scoring** — Field-level rules (exact match, fuzzy strings, tolerance on amounts and lead times, per-line-item checks) produce scores and match types.
+5. **Analysis** — The Next.js app aggregates accuracy by document type and field, with per-document expected-vs-extracted views.
+
+## Running locally
+
+**Prerequisites:** Node 20+, Python 3.11+, an [Anthropic API key](https://console.anthropic.com/).
 
 ```bash
-cd apps/web && npm run dev
-```
+# 1. API setup
+cd apps/api
+cp .env.example .env          # add ANTHROPIC_API_KEY
+pip install -e .                # or: uv sync
 
-Runs the Next.js frontend at [http://localhost:3000](http://localhost:3000).
+# 2. Full eval pipeline (seed + extract all + summary)
+cd ../..
+./scripts/run_eval.sh
 
-### API (`apps/api`)
-
-```bash
-cd apps/api && python scripts/seed.py
+# 3. Start API (if not already running)
 cd apps/api && uvicorn main:app --reload
+
+# 4. Web dashboard
+cd apps/web
+cp .env.example .env.local      # optional; defaults to http://localhost:8000
+npm install && npm run dev
 ```
 
-Seeds the SQLite database (`extractbench.db`), then runs the FastAPI backend at [http://localhost:8000](http://localhost:8000).
+Open [http://localhost:3000](http://localhost:3000). API health: [http://localhost:8000/health](http://localhost:8000/health).
+
+To run extraction for a single document:
+
+```bash
+curl -X POST http://localhost:8000/api/runs/{document_id}
+```
+
+## Tech choices
+
+| Choice | Rationale |
+|--------|-----------|
+| **Claude Sonnet** | Strong structured-output quality at a lower cost than Opus; good default for high-volume document extraction evals. |
+| **SQLite** | Zero-ops persistence; recipients can clone, run, and inspect `extractbench.db` without Docker or Postgres. |
+| **FastAPI** | Thin API layer with automatic OpenAPI docs and straightforward SQLAlchemy integration. |
+| **Next.js 15 (App Router)** | Server components fetch eval results without exposing API keys to the browser. |
+| **Deterministic scoring** | Rules-based comparison keeps evals reproducible and explainable; no second LLM judge required. |
+| **Plain-text fixtures** | Skips PDF generation while still modeling OCR scans, emails, and spreadsheets as extracted text. |
+
+## What I'd build next if this were production
+
+<!-- EDIT BEFORE SENDING -->
+
+[Placeholder — describe production follow-ups: layout-aware PDF ingestion, human review queue for partial extractions, per-format model routing, calibration dashboards by customer segment, and CI gates on field-level accuracy before prompt deploys.]
+
+## About the demo data
+
+All documents in ExtractBench are **synthetic**. They are modeled on real patterns observed in **[industry]** research and common B2B quoting workflows (multi-line SKUs, payment terms, validity windows, format-specific failure modes). No customer data, company names, or live contracts are included. Fictional vendors (e.g. Northbridge Steel, Halcyon Fasteners, Meridian Valves) are used throughout.
+
+## Deploying
+
+### Web (Vercel)
+
+1. Import the repo and set the root directory to `apps/web`.
+2. Add environment variable:
+   - `NEXT_PUBLIC_API_URL` — public URL of the deployed API (e.g. `https://your-api.fly.dev`).
+3. Deploy. The app is server-rendered and fetches the API at request time.
+
+### API (Railway or Fly.io)
+
+1. Deploy `apps/api` with Python 3.11.
+2. Set environment variables:
+   - `ANTHROPIC_API_KEY` — required for extractions.
+3. Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+4. On first deploy, run the seed and eval once (SSH or one-off job):
+   ```bash
+   python scripts/seed.py
+   python scripts/run_eval.py
+   ```
+5. Persist the `extractbench.db` volume between deploys if you want scores to survive restarts.
+
+See `.env.example` at the repo root for all variables.
+
+## Repository layout
+
+```
+apps/web/          Next.js dashboard
+apps/api/          FastAPI + SQLAlchemy + extraction/scoring
+scripts/           run_eval.sh — full local pipeline
+```

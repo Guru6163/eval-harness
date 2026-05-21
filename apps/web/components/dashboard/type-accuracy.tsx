@@ -12,8 +12,11 @@ export function TypeAccuracySection({ items }: TypeAccuracySectionProps) {
       </h2>
       <ul className="mt-12 space-y-10">
         {items.map((item) => (
-          <li key={item.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-6 md:gap-10">
-            <span className="w-10 text-sm tabular-nums text-muted">
+          <li
+            key={item.key}
+            className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[auto_1fr_auto] sm:gap-6 md:gap-10"
+          >
+            <span className="w-10 text-sm font-medium tabular-nums text-muted">
               {item.index}
             </span>
             <div className="min-w-0">
