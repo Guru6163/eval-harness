@@ -1,6 +1,6 @@
 import { FIELD_LABELS, SCORED_FIELDS } from "@/lib/fields";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://eval-harness-production.up.railway.app";
 
 const FIELDS_PER_DOCUMENT = 7;
 
